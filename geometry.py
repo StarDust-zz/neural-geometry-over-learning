@@ -1,0 +1,269 @@
+# SPDX-License-Identifier: MIT
+"""Neural geometry over learning — discrete pack.
+
+Stdlib only. No GPU, no network, no product imports.
+
+Claims under test:
+
+  Wakhloo, Slatton, Chung, Nat Neurosci 29, 682–692 (4 Feb 2026).
+  https://doi.org/10.1038/s41593-025-02183-y  (CC-BY 4.0)
+  Four mesoscopic stats (c, f, s, PR) govern linear-readout generalization
+  on tasks that share a latent structure. Early optimal codes are lower
+  dimensional and more correlated with latents; late codes expand and
+  factorize. Optimal spectrum flattens with sample count p:
+      psi_i = C * omega_i / (2 p omega_i + pi * sum omega).
+
+  Wójcik et al., Nat Neurosci (2026).
+  https://doi.org/10.1038/s41593-026-02333-w
+  Macaque PFC learning an XOR rule starts high-dimensional, nonlinear,
+  randomly mixed, then becomes low-dimensional and rule-selective.
+  A second stimulus set with the same structure realigns onto a shared
+  axis so the old readout generalizes.
+
+This pack is the discrete algebra of those claims, not a replay of
+the recordings or a trained net.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+from typing import Sequence
+
+
+def _dot(a: Sequence[float], b: Sequence[float]) -> float:
+    return sum(x * y for x, y in zip(a, b))
+
+
+def _scale(v: Sequence[float], s: float) -> list[float]:
+    return [s * x for x in v]
+
+
+def participation_ratio(evals: Sequence[float]) -> float:
+    """PR(Ψ) = (Tr Ψ)^2 / Tr(Ψ^2) for a diagonal (or already-eigenspanned) code."""
+    pos = [max(x, 0.0) for x in evals]
+    tr = sum(pos)
+    tr2 = sum(x * x for x in pos)
+    if tr2 <= 0:
+        return 0.0
+    return (tr * tr) / tr2
+
+
+def optimal_spectrum(omega: Sequence[float], p: float, C: float = 1.0) -> list[float]:
+    """Wakhloo et al. eq. for the optimal neural covariance eigenvalues."""
+    s = sum(omega)
+    return [C * w / (2.0 * p * w + math.pi * s) for w in omega]
+
+
+def neural_latent_corr(phi_cols: Sequence[Sequence[float]], psi_evals: Sequence[float], omega: Sequence[float]) -> float:
+    """c = Tr(Φ Φ^T) / (Tr Ψ Tr Ω). phi_cols[k] is the k-th column of Φ (n,)."""
+    tr_phiphi = sum(_dot(col, col) for col in phi_cols)
+    tr_psi = sum(psi_evals)
+    tr_omega = sum(omega)
+    if tr_psi <= 0 or tr_omega <= 0:
+        return 0.0
+    return tr_phiphi / (tr_psi * tr_omega)
+
+
+def signal_signal_factorization(phi_cols: Sequence[Sequence[float]], omega: Sequence[float]) -> float:
+    """
+    Discrete SSF: 1 when latent axes in neural space are orthogonal and
+    equally scaled; smaller when they overlap. Matches the paper's 'independent
+    latents on uncorrelated, whitened directions' without a full Ω^{-1} multiply.
+    """
+    if len(phi_cols) < 2:
+        return 1.0
+    norms = [math.sqrt(_dot(c, c)) for c in phi_cols]
+    if any(n <= 0 for n in norms):
+        return 0.0
+    cosines = []
+    for i in range(len(phi_cols)):
+        for j in range(i + 1, len(phi_cols)):
+            cosines.append(abs(_dot(phi_cols[i], phi_cols[j])) / (norms[i] * norms[j]))
+    overlap = sum(cosines) / len(cosines)
+    mean_n = sum(norms) / len(norms)
+    balance = 1.0 - (sum(abs(n - mean_n) for n in norms) / (len(norms) * mean_n))
+    return max(0.0, (1.0 - overlap) * balance)
+
+
+def signal_noise_factorization(signal_dirs: Sequence[Sequence[float]], noise_dirs: Sequence[Sequence[float]]) -> float:
+    """s high when noise is orthogonal to signal directions."""
+    if not noise_dirs:
+        return float("inf")
+    acc = []
+    for n in noise_dirs:
+        nn = math.sqrt(_dot(n, n)) or 1.0
+        leaks = []
+        for s in signal_dirs:
+            sn = math.sqrt(_dot(s, s)) or 1.0
+            leaks.append(abs(_dot(n, s)) / (nn * sn))
+        acc.append(max(leaks) if leaks else 0.0)
+    leak = sum(acc) / len(acc)
+    if leak <= 1e-12:
+        return float("inf")
+    return 1.0 / leak
+
+
+def hebbian_error(xs: Sequence[Sequence[float]], ys: Sequence[int], x_test: Sequence[Sequence[float]], y_test: Sequence[int]) -> float:
+    """Supervised Hebbian readout (Wakhloo eq. 3): w = mean_μ y_μ x_μ."""
+    dim = len(xs[0])
+    w = [0.0] * dim
+    p = len(xs)
+    for x, y in zip(xs, ys):
+        for i, xi in enumerate(x):
+            w[i] += y * xi
+    w = _scale(w, 1.0 / p)
+    wrong = 0
+    for x, y in zip(x_test, y_test):
+        pred = 1 if _dot(w, x) >= 0 else -1
+        if pred != y:
+            wrong += 1
+    return wrong / len(y_test)
+
+
+@dataclass(frozen=True)
+class Code:
+    """A linear population code x = A z, plus optional noise directions."""
+
+    axes: tuple[tuple[float, ...], ...]  # d axes in R^n, columns of A
+    omega: tuple[float, ...]
+    noise: tuple[tuple[float, ...], ...] = ()
+
+    @property
+    def n(self) -> int:
+        return len(self.axes[0])
+
+    def embed(self, z: Sequence[float]) -> list[float]:
+        x = [0.0] * self.n
+        for axis, zi in zip(self.axes, z):
+            for i, a in enumerate(axis):
+                x[i] += a * zi
+        return x
+
+    def _psi(self) -> list[list[float]]:
+        n = self.n
+        psi = [[0.0] * n for _ in range(n)]
+        for axis, w in zip(self.axes, self.omega):
+            for i in range(n):
+                for j in range(n):
+                    psi[i][j] += axis[i] * w * axis[j]
+        for d in self.noise:
+            for i in range(n):
+                for j in range(n):
+                    psi[i][j] += d[i] * d[j]
+        return psi
+
+    def stats(self) -> dict[str, float]:
+        phi = [tuple(_scale(axis, w)) for axis, w in zip(self.axes, self.omega)]
+        psi = self._psi()
+        tr_psi = sum(psi[i][i] for i in range(self.n))
+        tr_psi2 = sum(psi[i][j] * psi[j][i] for i in range(self.n) for j in range(self.n))
+        pr = (tr_psi * tr_psi) / tr_psi2 if tr_psi2 else 0.0
+        return {
+            "c": neural_latent_corr(phi, [tr_psi], self.omega),
+            "f": signal_signal_factorization(self.axes, self.omega),
+            "s": signal_noise_factorization(self.axes, self.noise),
+            "PR": pr,
+        }
+
+
+def early_code() -> Code:
+    """Compress: almost all variance on the informative latent."""
+    return Code(
+        axes=((1.0, 0.15, 0.0), (0.05, 0.02, 0.0)),
+        omega=(4.0, 1.0),
+        noise=((0.0, 0.0, 1.0),),
+    )
+
+
+def late_code() -> Code:
+    """Expand and factorize: orthogonal, closer-to-equal axes. Noise off-signal."""
+    return Code(
+        axes=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+        omega=(4.0, 1.0),
+        noise=((0.0, 0.0, 1.0),),
+    )
+
+
+# --- Wójcik XOR population ---
+
+XOR_CONDITIONS = (
+    # (color, shape, xor) with xor = color XOR shape, color/shape in {0,1}
+    (0, 0, 0),
+    (0, 1, 1),
+    (1, 0, 1),
+    (1, 1, 0),
+)
+
+
+def rates(selectivity: Sequence[tuple[float, float, float]], cond: tuple[int, int, int]) -> list[float]:
+    c, s, x = cond
+    out = []
+    for bc, bs, bx in selectivity:
+        out.append(bc * (2 * c - 1) + bs * (2 * s - 1) + bx * (2 * x - 1))
+    return out
+
+
+def decode_feature(selectivity: Sequence[tuple[float, float, float]], which: int) -> float:
+    """Linear population decode of color=0 / shape=1 / xor=2. Accuracy in [0, 1]."""
+    # Hebbian on the four conditions
+    xs = [rates(selectivity, cond) for cond in XOR_CONDITIONS]
+    ys = [1 if cond[which] == 1 else -1 for cond in XOR_CONDITIONS]
+    w = [0.0] * len(selectivity)
+    for x, y in zip(xs, ys):
+        for i, xi in enumerate(x):
+            w[i] += y * xi
+    correct = 0
+    for x, y in zip(xs, ys):
+        pred = 1 if _dot(w, x) >= 0 else -1
+        if pred == y:
+            correct += 1
+    return correct / 4.0
+
+
+def random_mixed(n: int = 12) -> list[tuple[float, float, float]]:
+    """Spherical mixed selectivity (deterministic LCG, no import random)."""
+    seed = 1
+    out = []
+    for _ in range(n):
+        trip = []
+        for _k in range(3):
+            seed = (1103515245 * seed + 12345) & 0x7FFFFFFF
+            trip.append((seed / 0x7FFFFFFF) * 2.0 - 1.0)
+        out.append((trip[0], trip[1], trip[2]))
+    return out
+
+
+def minimal_xor(n: int = 12) -> list[tuple[float, float, float]]:
+    seed = 99
+    out = []
+    for _ in range(n):
+        seed = (1103515245 * seed + 12345) & 0x7FFFFFFF
+        sign = 1.0 if seed % 2 == 0 else -1.0
+        out.append((0.0, 0.0, sign))
+    return out
+
+
+def shattering_score(selectivity: Sequence[tuple[float, float, float]]) -> float:
+    """Mean linear-decode accuracy over color, shape, XOR (three dichotomies)."""
+    return sum(decode_feature(selectivity, k) for k in (0, 1, 2)) / 3.0
+
+
+def cross_set_xor(
+    sel_a: Sequence[tuple[float, float, float]],
+    sel_b: Sequence[tuple[float, float, float]],
+) -> float:
+    """Train XOR readout on population A, test on B (same condition order)."""
+    xs_a = [rates(sel_a, cond) for cond in XOR_CONDITIONS]
+    ys = [1 if cond[2] == 1 else -1 for cond in XOR_CONDITIONS]
+    w = [0.0] * len(sel_a)
+    for x, y in zip(xs_a, ys):
+        for i, xi in enumerate(x):
+            w[i] += y * xi
+    xs_b = [rates(sel_b, cond) for cond in XOR_CONDITIONS]
+    correct = 0
+    for x, y in zip(xs_b, ys):
+        pred = 1 if _dot(w, x) >= 0 else -1
+        if pred == y:
+            correct += 1
+    return correct / 4.0
