@@ -55,6 +55,26 @@ def optimal_spectrum(omega: Sequence[float], p: float, C: float = 1.0) -> list[f
     return [C * w / (2.0 * p * w + math.pi * s) for w in omega]
 
 
+def optimal_spectrum_path(
+    omega: Sequence[float], ps: Sequence[float], C: float = 1.0
+) -> list[dict[str, float | list[float]]]:
+    """Optimal ψ, PR, peak-to-tail spread, and weak-mode share vs sample count p."""
+    rows: list[dict[str, float | list[float]]] = []
+    for p in ps:
+        psi = optimal_spectrum(omega, p, C)
+        tr = sum(psi)
+        rows.append(
+            {
+                "p": p,
+                "psi": psi,
+                "PR": participation_ratio(psi),
+                "spread": psi[0] / psi[-1] if psi[-1] else float("inf"),
+                "weak_share": psi[-1] / tr if tr else 0.0,
+            }
+        )
+    return rows
+
+
 def neural_latent_corr(phi_cols: Sequence[Sequence[float]], psi_evals: Sequence[float], omega: Sequence[float]) -> float:
     """c = Tr(Φ Φ^T) / (Tr Ψ Tr Ω). phi_cols[k] is the k-th column of Φ (n,)."""
     tr_phiphi = sum(_dot(col, col) for col in phi_cols)
