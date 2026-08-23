@@ -87,6 +87,8 @@ Thirteen `PASS` lines and `13/13 passed`.
 | 50 | 2.989 | 1.156 | 0.307 |
 | 100 | 2.997 | 1.080 | 0.319 |
 
+`omega = (4, 2, 1)`. As `p → ∞`, PR → 3 and spread → 1.
+
 ## What this is not
 
 - Not Chung’s MLP / DeepLabCut / V4–IT / rat CA1 analyses, and not a claim we reproduced their `R²`.
