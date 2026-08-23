@@ -39,7 +39,9 @@ collapse. A snapshot cannot tell you which stage you are in.
 
 ## Keepers
 
-If 7/7 pass: **the code is a scheduled change in geometry.** Early
-and late are different executables over the same latents. Mixed vs
-minimal is a learning stage, not a rival architecture. Transfer is
-alignment of axes, not a new decoder.
+If 12/12 pass: **the code is a scheduled change in geometry.** Early
+and late are different executables over the same latents, and the
+stats move continuously along that path. Mixed vs minimal is a
+learning stage, not a rival architecture. Transfer is alignment of
+a shared axis (a latent, or XOR), not a new decoder and not the
+whole mix. On-axis noise is the thing a late code gets rid of.

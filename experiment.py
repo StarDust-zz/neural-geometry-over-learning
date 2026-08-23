@@ -4,16 +4,23 @@
 
 from geometry import (
     XOR_CONDITIONS,
+    blend_code,
+    blend_selectivity,
+    cross_code_error,
+    cross_set_feature,
     cross_set_xor,
     decode_feature,
     early_code,
     hebbian_error,
     late_code,
+    late_code_shared_z1,
+    leaky_early_code,
     minimal_xor,
     optimal_spectrum,
     participation_ratio,
     random_mixed,
     shattering_score,
+    xor_aligned_feature_mixed,
 )
 
 
@@ -115,6 +122,101 @@ def scenario_7():
     return {"aligned": aligned, "unaligned": unaligned}
 
 
+def scenario_8():
+    """Early→late is a path: c falls, factorization and PR rise, weak latent unlocks."""
+    ts = (0.0, 0.5, 1.0)
+    stats = [blend_code(t).stats() for t in ts]
+    _ok(stats[0]["c"] > stats[1]["c"] > stats[2]["c"], [s["c"] for s in stats])
+    _ok(stats[0]["f"] < stats[1]["f"] < stats[2]["f"], [s["f"] for s in stats])
+    _ok(stats[0]["PR"] < stats[1]["PR"] < stats[2]["PR"], [s["PR"] for s in stats])
+    zs = [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
+    ys = [1, -1, 1, -1]
+    extra = [(0.3, 1.0), (0.3, -1.0), (-0.3, 1.0), (-0.3, -1.0)]
+    err0 = hebbian_error(
+        [blend_code(0.0).embed(z) for z in zs], ys, [blend_code(0.0).embed(z) for z in extra], ys
+    )
+    err1 = hebbian_error(
+        [blend_code(1.0).embed(z) for z in zs], ys, [blend_code(1.0).embed(z) for z in extra], ys
+    )
+    _ok(err0 > err1, (err0, err1))
+    _ok(err1 == 0.0, err1)
+    return {
+        "c": [round(s["c"], 3) for s in stats],
+        "f": [round(s["f"], 3) for s in stats],
+        "PR": [round(s["PR"], 3) for s in stats],
+        "z2_err_early": err0,
+        "z2_err_late": err1,
+    }
+
+
+def scenario_9():
+    """On-axis noise makes SNF finite; off-axis late noise stays clean."""
+    leaky = leaky_early_code().stats()
+    late = late_code().stats()
+    early = early_code().stats()
+    _ok(leaky["s"] != float("inf"), leaky["s"])
+    _ok(late["s"] > leaky["s"], (leaky["s"], late["s"]))
+    _ok(early["s"] > leaky["s"], (leaky["s"], early["s"]))
+    return {"leaky_s": round(leaky["s"], 3), "early_s": "inf", "late_s": "inf"}
+
+
+def scenario_10():
+    """Shared latent structure: a z1 readout transfers; a remapped z2 readout does not."""
+    src = late_code()
+    dest = late_code_shared_z1()
+    z1_train = [(1.0, 0.2), (1.0, -0.2), (-1.0, 0.2), (-1.0, -0.2)]
+    y1 = [1, 1, -1, -1]
+    z1_test = [(0.8, 0.5), (0.8, -0.5), (-0.8, 0.5), (-0.8, -0.5)]
+    z2_train = [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
+    y2 = [1, -1, 1, -1]
+    z2_test = [(0.3, 1.0), (0.3, -1.0), (-0.3, 1.0), (-0.3, -1.0)]
+    z1_xfer = cross_code_error(src, dest, z1_train, y1, z1_test)
+    z2_xfer = cross_code_error(src, dest, z2_train, y2, z2_test)
+    z2_same = cross_code_error(src, src, z2_train, y2, z2_test)
+    _ok(z1_xfer == 0.0, z1_xfer)
+    _ok(z2_xfer > z1_xfer, (z1_xfer, z2_xfer))
+    _ok(z2_same == 0.0, z2_same)
+    return {"z1_transfer_err": z1_xfer, "z2_transfer_err": z2_xfer, "z2_same_code_err": z2_same}
+
+
+def scenario_11():
+    """Mixed→minimal path: XOR stays decodable; irrelevant dichotomies collapse."""
+    t0, t_mid, t1 = blend_selectivity(0.0), blend_selectivity(0.75), blend_selectivity(1.0)
+    x0, x_mid, x1 = decode_feature(t0, 2), decode_feature(t_mid, 2), decode_feature(t1, 2)
+    c0, c1 = decode_feature(t0, 0), decode_feature(t1, 0)
+    sh0, sh_mid, sh1 = shattering_score(t0), shattering_score(t_mid), shattering_score(t1)
+    _ok(x0 == 1.0 and x_mid == 1.0 and x1 == 1.0, (x0, x_mid, x1))
+    _ok(c0 == 1.0 and c1 == 0.5, (c0, c1))
+    _ok(sh0 > sh_mid > sh1, (sh0, sh_mid, sh1))
+    return {
+        "xor": [x0, x_mid, x1],
+        "color_early": c0,
+        "color_late": c1,
+        "shatter": [round(sh0, 3), round(sh_mid, 3), round(sh1, 3)],
+    }
+
+
+def scenario_12():
+    """Transfer is axis-specific: shared XOR axis transfers; remixed color does not."""
+    late = minimal_xor()
+    aligned = xor_aligned_feature_mixed()
+    mixed = random_mixed()
+    xor_aligned = cross_set_xor(late, aligned)
+    xor_unaligned = cross_set_xor(late, mixed)
+    color_local = decode_feature(aligned, 0)
+    color_xfer = cross_set_feature(mixed, aligned, 0)
+    _ok(xor_aligned == 1.0, xor_aligned)
+    _ok(xor_unaligned < xor_aligned, (xor_unaligned, xor_aligned))
+    _ok(color_local == 1.0, color_local)
+    _ok(color_xfer < color_local, (color_xfer, color_local))
+    return {
+        "xor_aligned": xor_aligned,
+        "xor_unaligned": xor_unaligned,
+        "color_local_on_remix": color_local,
+        "color_transfer_mixed_to_remix": color_xfer,
+    }
+
+
 def main():
     scenarios = [
         ("1 optimal spectrum flattens with p", scenario_1),
@@ -124,6 +226,11 @@ def main():
         ("5 mixed decodes all; minimal decodes XOR only", scenario_5),
         ("6 shattering dim drops from mixed to minimal", scenario_6),
         ("7 second set aligns only after the late geometry", scenario_7),
+        ("8 early→late path: c falls, f and PR rise", scenario_8),
+        ("9 on-axis noise: SNF becomes finite", scenario_9),
+        ("10 shared z1 transfers; remapped z2 does not", scenario_10),
+        ("11 mixed→minimal: XOR stays, extras collapse", scenario_11),
+        ("12 transfer is the shared axis, not the whole mix", scenario_12),
     ]
     failed = 0
     for name, fn in scenarios:
