@@ -17,6 +17,7 @@ from geometry import (
     leaky_early_code,
     minimal_xor,
     optimal_spectrum,
+    optimal_spectrum_path,
     participation_ratio,
     random_mixed,
     shattering_score,
@@ -217,6 +218,30 @@ def scenario_12():
     }
 
 
+def scenario_13():
+    """p-sweep: optimal spectrum flattens monotonically as sample count grows."""
+    omega = (4.0, 2.0, 1.0)
+    ps = (1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
+    rows = optimal_spectrum_path(omega, ps)
+    prs = [r["PR"] for r in rows]
+    spreads = [r["spread"] for r in rows]
+    weak = [r["weak_share"] for r in rows]
+    _ok(all(prs[i] < prs[i + 1] for i in range(len(prs) - 1)), prs)
+    _ok(all(spreads[i] > spreads[i + 1] for i in range(len(spreads) - 1)), spreads)
+    _ok(all(weak[i] < weak[i + 1] for i in range(len(weak) - 1)), weak)
+    _ok(prs[-1] > 2.9, prs[-1])
+    _ok(spreads[-1] < 1.2, spreads[-1])
+    return {
+        f"p={int(r['p']) if float(r['p']).is_integer() else r['p']}": {
+            "PR": round(r["PR"], 3),
+            "spread": round(r["spread"], 3),
+            "weak_share": round(r["weak_share"], 3),
+            "psi": [round(x, 4) for x in r["psi"]],
+        }
+        for r in rows
+    }
+
+
 def main():
     scenarios = [
         ("1 optimal spectrum flattens with p", scenario_1),
@@ -231,6 +256,7 @@ def main():
         ("10 shared z1 transfers; remapped z2 does not", scenario_10),
         ("11 mixed→minimal: XOR stays, extras collapse", scenario_11),
         ("12 transfer is the shared axis, not the whole mix", scenario_12),
+        ("13 p-sweep: optimal spectrum flattens with sample count", scenario_13),
     ]
     failed = 0
     for name, fn in scenarios:

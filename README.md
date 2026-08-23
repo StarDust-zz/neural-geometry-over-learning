@@ -13,7 +13,7 @@ This pack is the discrete algebra of those claims. Not a replay of the recording
 python3 experiment.py
 ```
 
-Last run: **12/12 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
+Last run: **13/13 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
 
 ## Why this exists
 
@@ -53,12 +53,12 @@ Wójcik adds the stage names:
 python3 experiment.py
 ```
 
-Twelve `PASS` lines and `12/12 passed`.
+Thirteen `PASS` lines and `13/13 passed`.
 
 | file | what it is |
 | --- | --- |
 | [`geometry.py`](geometry.py) | four stats, optimal spectrum, Hebbian readout, mixed vs minimal XOR |
-| [`experiment.py`](experiment.py) | the seven assertions |
+| [`experiment.py`](experiment.py) | the thirteen assertions |
 | [`DESCRIPTION.md`](DESCRIPTION.md) | short lab note |
 
 ## Assertions
@@ -75,6 +75,17 @@ Twelve `PASS` lines and `12/12 passed`.
 10. **Shared latent.** A Hebbian readout of `z1` transfers onto a code that keeps that axis. A readout of `z2` does not transfer once `z2` is rotated away.
 11. **Mixed→minimal path.** XOR stays linearly decodable along the blend. Color collapses. Shattering dimensionality falls.
 12. **Axis-specific transfer.** A second set that keeps the XOR signs but remixes color/shape still accepts the old XOR readout. A color readout trained on a different mix does not transfer, even though color is locally decodable.
+13. **`p`-sweep.** Optimal `psi` at `p = 1, 2, 5, 10, 20, 50, 100`. Participation ratio rises, peak-to-tail spread falls, and the weakest mode's share of the trace grows. The code pays rent on the weak latents as samples accumulate.
+
+| `p` | PR | spread | weak share |
+| ---: | ---: | ---: | ---: |
+| 1 | 2.496 | 3.200 | 0.165 |
+| 2 | 2.603 | 2.737 | 0.183 |
+| 5 | 2.776 | 2.064 | 0.218 |
+| 10 | 2.887 | 1.647 | 0.250 |
+| 20 | 2.954 | 1.363 | 0.279 |
+| 50 | 2.989 | 1.156 | 0.307 |
+| 100 | 2.997 | 1.080 | 0.319 |
 
 ## What this is not
 
