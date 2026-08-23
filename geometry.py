@@ -185,6 +185,44 @@ def late_code() -> Code:
     )
 
 
+def _blend_axes(
+    a: Sequence[Sequence[float]], b: Sequence[Sequence[float]], t: float
+) -> tuple[tuple[float, ...], ...]:
+    return tuple(tuple((1.0 - t) * x + t * y for x, y in zip(u, v)) for u, v in zip(a, b))
+
+
+def blend_code(t: float) -> Code:
+    """Linear path from early (t=0) to late (t=1). Same latents, moving geometry."""
+    e, late = early_code(), late_code()
+    return Code(axes=_blend_axes(e.axes, late.axes, t), omega=e.omega, noise=e.noise)
+
+
+def leaky_early_code() -> Code:
+    """Early compression with noise leaking onto the coding plane (finite SNF)."""
+    e = early_code()
+    return Code(axes=e.axes, omega=e.omega, noise=((0.4, 0.7, 0.2),))
+
+
+def late_code_shared_z1() -> Code:
+    """Same z1 axis as late_code; z2 is rotated onto the former noise direction."""
+    return Code(
+        axes=((1.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+        omega=(4.0, 1.0),
+        noise=((0.0, 1.0, 0.0),),
+    )
+
+
+def cross_code_error(
+    train: Code,
+    test: Code,
+    zs_train: Sequence[Sequence[float]],
+    ys: Sequence[int],
+    zs_test: Sequence[Sequence[float]],
+) -> float:
+    """Hebbian readout trained on one code, tested on another (same latents)."""
+    return hebbian_error([train.embed(z) for z in zs_train], ys, [test.embed(z) for z in zs_test], ys)
+
+
 # --- Wójcik XOR population ---
 
 XOR_CONDITIONS = (
@@ -244,18 +282,38 @@ def minimal_xor(n: int = 12) -> list[tuple[float, float, float]]:
     return out
 
 
+def blend_selectivity(t: float, n: int = 12) -> list[tuple[float, float, float]]:
+    """Path from random mixed (t=0) to minimal XOR (t=1)."""
+    mixed, minimal = random_mixed(n), minimal_xor(n)
+    return [tuple((1.0 - t) * a + t * b for a, b in zip(r, m)) for r, m in zip(mixed, minimal)]
+
+
+def xor_aligned_feature_mixed(n: int = 12) -> list[tuple[float, float, float]]:
+    """Second set: same XOR signs as minimal_xor, remixed color/shape."""
+    seed = 1
+    out = []
+    for _bc, _bs, bx in minimal_xor(n):
+        trip = []
+        for _k in range(2):
+            seed = (1103515245 * seed + 12345) & 0x7FFFFFFF
+            trip.append((seed / 0x7FFFFFFF) * 2.0 - 1.0)
+        out.append((trip[0], trip[1], bx))
+    return out
+
+
 def shattering_score(selectivity: Sequence[tuple[float, float, float]]) -> float:
     """Mean linear-decode accuracy over color, shape, XOR (three dichotomies)."""
     return sum(decode_feature(selectivity, k) for k in (0, 1, 2)) / 3.0
 
 
-def cross_set_xor(
+def cross_set_feature(
     sel_a: Sequence[tuple[float, float, float]],
     sel_b: Sequence[tuple[float, float, float]],
+    which: int,
 ) -> float:
-    """Train XOR readout on population A, test on B (same condition order)."""
+    """Train a linear readout of feature `which` on A, test on B."""
     xs_a = [rates(sel_a, cond) for cond in XOR_CONDITIONS]
-    ys = [1 if cond[2] == 1 else -1 for cond in XOR_CONDITIONS]
+    ys = [1 if cond[which] == 1 else -1 for cond in XOR_CONDITIONS]
     w = [0.0] * len(sel_a)
     for x, y in zip(xs_a, ys):
         for i, xi in enumerate(x):
@@ -267,3 +325,11 @@ def cross_set_xor(
         if pred == y:
             correct += 1
     return correct / 4.0
+
+
+def cross_set_xor(
+    sel_a: Sequence[tuple[float, float, float]],
+    sel_b: Sequence[tuple[float, float, float]],
+) -> float:
+    """Train XOR readout on population A, test on B (same condition order)."""
+    return cross_set_feature(sel_a, sel_b, 2)

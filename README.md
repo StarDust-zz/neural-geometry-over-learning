@@ -13,7 +13,7 @@ This pack is the discrete algebra of those claims. Not a replay of the recording
 python3 experiment.py
 ```
 
-Last run: **7/7 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
+Last run: **12/12 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
 
 ## Why this exists
 
@@ -53,7 +53,7 @@ Wójcik adds the stage names:
 python3 experiment.py
 ```
 
-Seven `PASS` lines and `7/7 passed`.
+Twelve `PASS` lines and `12/12 passed`.
 
 | file | what it is |
 | --- | --- |
@@ -70,6 +70,11 @@ Seven `PASS` lines and `7/7 passed`.
 5. **Mixed vs minimal.** Random mixed selectivity linearly decodes color, shape, and XOR. Minimal XOR decodes XOR only (color and shape at chance).
 6. **Shattering dimensionality drops.** Mean decode over those three dichotomies is 1.0 mixed, 2/3 minimal.
 7. **Second set.** A late (minimal) XOR readout transfers to another minimal population. It does not transfer to an unaligned mixed population.
+8. **Early→late path.** Interpolating the linear code drops `c` and raises `f` and `PR`. The weak latent stays missed at `t=0` and is solved at `t=1`.
+9. **On-axis noise.** Leak noise onto the coding plane and SNF becomes finite. Off-axis early/late constructions stay infinite (cleaner).
+10. **Shared latent.** A Hebbian readout of `z1` transfers onto a code that keeps that axis. A readout of `z2` does not transfer once `z2` is rotated away.
+11. **Mixed→minimal path.** XOR stays linearly decodable along the blend. Color collapses. Shattering dimensionality falls.
+12. **Axis-specific transfer.** A second set that keeps the XOR signs but remixes color/shape still accepts the old XOR readout. A color readout trained on a different mix does not transfer, even though color is locally decodable.
 
 ## What this is not
 
