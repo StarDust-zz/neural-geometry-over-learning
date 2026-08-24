@@ -40,7 +40,7 @@ collapse. A snapshot cannot tell you which stage you are in.
 
 ## Keepers
 
-If 18/18 pass: **the code is a scheduled change in geometry.** Early
+If 21/21 pass: **the code is a scheduled change in geometry.** Early
 and late are different executables over the same latents, and the
 stats move continuously along that path. The optimal spectrum
 flattens with sample count `p`: PR rises, spread falls, the weak
@@ -54,4 +54,7 @@ and becoming distractible are different times on the same path.
 A frozen mixed XOR readout survives abstraction; a frozen color
 readout does not. More aligned copies do not save the late code;
 one flipped pair does. Observation noise blurs the cliff. It does
-not replace a balanced sample.
+not replace a balanced sample. Sequential arrival: late stays
+trapped until a flipped pair arrives, can be re-trapped by a
+biased tail, and an EMA recovers faster than the batch then
+overshoots into the opposite trap. Early is immune to order.

@@ -14,6 +14,7 @@ from geometry import (
     early_code,
     few_shot_distractor_error,
     distractor_error,
+    ema_holdouts,
     hebbian_error,
     late_code,
     late_code_shared_z1,
@@ -22,6 +23,8 @@ from geometry import (
     NOISE_SEEDS,
     optimal_spectrum,
     optimal_spectrum_path,
+    prefix_holdouts,
+    arrival_stream,
     participation_ratio,
     random_mixed,
     shattering_score,
@@ -326,6 +329,60 @@ def scenario_18():
     }
 
 
+def scenario_19():
+    """Sequential prefix: 4 aligned then 4 flipped. Late stays trapped until a flipped pair."""
+    stream = arrival_stream(4, 4)
+    late = {int(r["n"]): r for r in prefix_holdouts(late_code(), stream)}
+    early = {int(r["n"]): r for r in prefix_holdouts(early_code(), stream)}
+    _ok(all(r["either"] == 0.0 for r in early.values()), early)
+    _ok(late[4]["anti"] == 1.0, late[4])
+    _ok(late[5]["anti"] == 1.0, late[5])
+    _ok(late[6]["anti"] == 0.0 and late[6]["align"] == 0.0, late[6])
+    _ok(late[8]["either"] == 0.0, late[8])
+    return {
+        "late_anti": [late[n]["anti"] for n in range(2, 9)],
+        "late_align": [late[n]["align"] for n in range(2, 9)],
+        "recovers_at": 6,
+    }
+
+
+def scenario_20():
+    """Reverse prefix: 2 flipped then 6 aligned. Late recovers, then the tail re-traps it."""
+    stream = arrival_stream(6, 2, flipped_first=True)
+    late = {int(r["n"]): r for r in prefix_holdouts(late_code(), stream)}
+    early = prefix_holdouts(early_code(), stream)
+    _ok(all(r["either"] == 0.0 for r in early), [r["either"] for r in early])
+    _ok(late[2]["align"] == 1.0 and late[2]["anti"] == 0.0, late[2])
+    _ok(late[4]["either"] == 0.0, late[4])
+    _ok(late[8]["anti"] >= 0.5, late[8])
+    _ok(late[8]["anti"] > late[4]["anti"], (late[4], late[8]))
+    return {
+        "late_anti": [late[n]["anti"] for n in range(2, 9)],
+        "late_align": [late[n]["align"] for n in range(2, 9)],
+        "retraps_at": 8,
+    }
+
+
+def scenario_21():
+    """EMA η=0.3: late recovers faster than the batch prefix, then overshoots to −z2."""
+    stream = arrival_stream(4, 4)
+    eta = 0.3
+    late_ema = {int(r["n"]): r for r in ema_holdouts(late_code(), stream, eta)}
+    late_batch = {int(r["n"]): r for r in prefix_holdouts(late_code(), stream)}
+    early_ema = ema_holdouts(early_code(), stream, eta)
+    _ok(all(r["either"] == 0.0 for r in early_ema), [r["either"] for r in early_ema])
+    _ok(late_ema[4]["anti"] == 1.0, late_ema[4])
+    _ok(late_ema[5]["anti"] == 0.0, late_ema[5])
+    _ok(late_batch[5]["anti"] == 1.0, late_batch[5])
+    _ok(late_ema[8]["align"] == 1.0, late_ema[8])
+    return {
+        "eta": eta,
+        "ema_anti": [late_ema[n]["anti"] for n in range(4, 9)],
+        "ema_align": [late_ema[n]["align"] for n in range(4, 9)],
+        "batch_anti_at_5": late_batch[5]["anti"],
+    }
+
+
 def main():
     scenarios = [
         ("1 optimal spectrum flattens with p", scenario_1),
@@ -346,6 +403,9 @@ def main():
         ("16 frozen mixed: XOR rides to minimal; color dies", scenario_16),
         ("17 more points: aligned copies fail; a flipped pair saves late", scenario_17),
         ("18 noise: trap blurs, more aligned copies still fail", scenario_18),
+        ("19 sequential: late trapped until a flipped pair arrives", scenario_19),
+        ("20 reverse stream: recovered late is re-trapped by an aligned tail", scenario_20),
+        ("21 EMA: late recovers faster than batch, then overshoots", scenario_21),
     ]
     failed = 0
     for name, fn in scenarios:

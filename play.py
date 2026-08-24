@@ -12,6 +12,10 @@ from geometry import (
     decode_feature,
     distractor_error,
     few_shot_distractor_error,
+    arrival_stream,
+    ema_holdouts,
+    prefix_holdouts,
+    stream_kind,
     early_code,
     late_code,
     minimal_xor,
@@ -149,6 +153,48 @@ def noise_sweep() -> None:
     print("  notice: noise blurs the cliff. it does not replace a flipped pair.")
 
 
+def _arrival_table(title: str, note: str, stream, mode: str, eta: float = 0.3) -> None:
+    _section(title, note)
+    print(f"  {'n':>3}  k   {'e_anti':>6} {'e_aln':>5}  {'l_anti':>6} {'l_aln':>5}  late-either")
+    if mode == "prefix":
+        early = prefix_holdouts(early_code(), stream)
+        late = prefix_holdouts(late_code(), stream)
+    else:
+        early = ema_holdouts(early_code(), stream, eta)
+        late = ema_holdouts(late_code(), stream, eta)
+    for z, e, l in zip(stream, early, late):
+        print(
+            f"  {int(l['n']):3d}  {stream_kind(z)}   "
+            f"{e['anti']:6.2f} {e['align']:5.2f}  "
+            f"{l['anti']:6.2f} {l['align']:5.2f}  {_bar(l['either'])}"
+        )
+
+
+def sequential_arrival() -> None:
+    _arrival_table(
+        "F  sequential arrival (two-sided holdout)",
+        "anti catches +z2; align catches -z2. stream: 4 aligned, then 4 flipped. full-history Hebbian.",
+        arrival_stream(4, 4),
+        "prefix",
+    )
+    print("  notice: one flipped point is not enough after a longer streak. a pair recovers both sides.")
+    _arrival_table(
+        "   reverse: 2 flipped, then 6 aligned",
+        "same readout. a recovered late code can be re-trapped by a biased tail.",
+        arrival_stream(6, 2, flipped_first=True),
+        "prefix",
+    )
+    print("  notice: early never takes either trap. late's history is a count, and the tail can win.")
+    _arrival_table(
+        "   EMA eta=0.3 on 4 aligned then 4 flipped",
+        "sticky update w <- (1-eta) w + eta y x. forgets; order matters.",
+        arrival_stream(4, 4),
+        "ema",
+        0.3,
+    )
+    print("  notice: forgetting recovers on the first flip, then overshoots into the opposite trap.")
+
+
 def main() -> None:
     print("neural geometry playground")
     print("a path, not a snapshot. stdlib only.")
@@ -157,6 +203,7 @@ def main() -> None:
     abstraction_path()
     more_points()
     noise_sweep()
+    sequential_arrival()
     print()
 
 

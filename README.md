@@ -13,7 +13,7 @@ This pack is the discrete algebra of those claims. Not a replay of the recording
 python3 experiment.py
 ```
 
-Last run: **18/18 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
+Last run: **21/21 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
 
 ```
 python3 play.py
@@ -59,13 +59,13 @@ Wójcik adds the stage names:
 python3 experiment.py
 ```
 
-Eighteen `PASS` lines and `18/18 passed`. `python3 play.py` prints the five paths.
+Twenty-one `PASS` lines and `21/21 passed`. `python3 play.py` prints the paths.
 
 | file | what it is |
 | --- | --- |
 | [`geometry.py`](geometry.py) | four stats, optimal spectrum, Hebbian readout, mixed vs minimal XOR |
-| [`experiment.py`](experiment.py) | the eighteen assertions |
-| [`play.py`](play.py) | trap, alignment, abstraction, more points, noise |
+| [`experiment.py`](experiment.py) | the twenty-one assertions |
+| [`play.py`](play.py) | trap, alignment, abstraction, more points, noise, sequential arrival |
 | [`DESCRIPTION.md`](DESCRIPTION.md) | short lab note |
 
 ## Assertions
@@ -88,6 +88,9 @@ Eighteen `PASS` lines and `18/18 passed`. `python3 play.py` prints the five path
 16. **Frozen mixed readouts.** Train color and XOR on the mixed population, test along the path to minimal. XOR rides along (it was already in the mix). Color transfer dies. Abstraction is lossy.
 17. **More points.** Eight aligned copies of the same `z2`–label correlation still trap the late code (error 1). One flipped pair (four points total) drops late to 0. Extra samples of the same spurious cloud are not more `p`.
 18. **Noise.** Additive ambient jitter (`σ = 0.5`, 8 seeds, 10 test points) blurs the cliff along `t` but does not flip the winner: early stays near 0, late stays above 0.7, and eight aligned copies look like two. Once the cloud is balanced, both codes survive the same noise.
+19. **Sequential prefix.** Stream 4 aligned then 4 flipped. Full-history Hebbian. Late stays trapped on the anti-aligned holdout through the first flipped point (`n=5`). A flipped pair (`n=6`) recovers both holdouts. Early is 0 on both sides the whole time. After a longer biased streak, one flip is not enough.
+20. **Re-trap.** Stream 2 flipped then 6 aligned. Late starts in the opposite trap (`−z2`), recovers at `n=4`, then the aligned tail drives anti-aligned error back up. History is a count. A recovered late code is not safe.
+21. **EMA.** `w ← (1−η)w + η y x` with `η=0.3` on the 4+4 stream. Late recovers on the first flip (batch has not). Then it overshoots: the flipped streak becomes a new trap. Forgetting is faster and less stable. Early never moves.
 
 | `p` | PR | spread | weak share |
 | ---: | ---: | ---: | ---: |

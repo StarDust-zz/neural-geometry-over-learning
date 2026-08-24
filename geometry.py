@@ -124,7 +124,7 @@ def signal_noise_factorization(signal_dirs: Sequence[Sequence[float]], noise_dir
     return 1.0 / leak
 
 
-def hebbian_error(xs: Sequence[Sequence[float]], ys: Sequence[int], x_test: Sequence[Sequence[float]], y_test: Sequence[int]) -> float:
+def hebbian_weights(xs: Sequence[Sequence[float]], ys: Sequence[int]) -> list[float]:
     """Supervised Hebbian readout (Wakhloo eq. 3): w = mean_μ y_μ x_μ."""
     dim = len(xs[0])
     w = [0.0] * dim
@@ -132,13 +132,21 @@ def hebbian_error(xs: Sequence[Sequence[float]], ys: Sequence[int], x_test: Sequ
     for x, y in zip(xs, ys):
         for i, xi in enumerate(x):
             w[i] += y * xi
-    w = _scale(w, 1.0 / p)
+    return _scale(w, 1.0 / p) if p else w
+
+
+def readout_error(w: Sequence[float], xs: Sequence[Sequence[float]], ys: Sequence[int]) -> float:
     wrong = 0
-    for x, y in zip(x_test, y_test):
+    for x, y in zip(xs, ys):
         pred = 1 if _dot(w, x) >= 0 else -1
         if pred != y:
             wrong += 1
-    return wrong / len(y_test)
+    return wrong / len(ys)
+
+
+def hebbian_error(xs: Sequence[Sequence[float]], ys: Sequence[int], x_test: Sequence[Sequence[float]], y_test: Sequence[int]) -> float:
+    """Supervised Hebbian readout (Wakhloo eq. 3): w = mean_μ y_μ x_μ."""
+    return readout_error(hebbian_weights(xs, ys), x_test, y_test)
 
 
 @dataclass(frozen=True)
@@ -256,6 +264,18 @@ _DISTRACTOR_TEST_Z = (
     (-0.6, 0.6),
     (-0.9, 1.5),
 )
+_ALIGNED_TEST_Z = (
+    (1.0, 1.0),
+    (0.8, 0.8),
+    (1.2, 1.2),
+    (0.6, 0.6),
+    (0.9, 1.5),
+    (-1.0, -1.0),
+    (-0.8, -0.8),
+    (-1.2, -1.2),
+    (-0.6, -0.6),
+    (-0.9, -1.5),
+)
 NOISE_SEEDS = (3, 7, 11, 19, 29, 41, 43, 53)
 
 
@@ -314,6 +334,57 @@ def distractor_error(
 def few_shot_distractor_error(code: Code) -> float:
     """Two aligned points, no noise: the original trap."""
     return distractor_error(code, n_aligned=2, n_flipped=0, noise=0.0, seeds=(7,))
+
+
+def arrival_stream(n_aligned: int, n_flipped: int, flipped_first: bool = False) -> list[tuple[float, float]]:
+    """Sequential cloud: a biased streak, then the other family (or the reverse)."""
+    zs_a, _ = distractor_cloud(n_aligned, 0)
+    zs_f, _ = distractor_cloud(0, n_flipped)
+    return zs_f + zs_a if flipped_first else zs_a + zs_f
+
+
+def stream_kind(z: Sequence[float]) -> str:
+    return "A" if tuple(z) in _ALIGNED_Z else "F"
+
+
+def two_sided_holdout(code: Code, w: Sequence[float]) -> dict[str, float]:
+    """Anti-aligned test catches +z2; aligned test catches −z2. either = max."""
+    anti = readout_error(w, [code.embed(z) for z in _DISTRACTOR_TEST_Z], [_label_z1(z) for z in _DISTRACTOR_TEST_Z])
+    align = readout_error(w, [code.embed(z) for z in _ALIGNED_TEST_Z], [_label_z1(z) for z in _ALIGNED_TEST_Z])
+    return {"anti": anti, "align": align, "either": max(anti, align)}
+
+
+def prefix_holdouts(code: Code, stream: Sequence[Sequence[float]]) -> list[dict[str, float]]:
+    """Full-history Hebbian after each arrival. Order only matters via the prefix counts."""
+    xs: list[list[float]] = []
+    ys: list[int] = []
+    rows: list[dict[str, float]] = []
+    for i, z in enumerate(stream):
+        xs.append(code.embed(z))
+        ys.append(_label_z1(z))
+        row = two_sided_holdout(code, hebbian_weights(xs, ys))
+        row["n"] = float(i + 1)
+        rows.append(row)
+    return rows
+
+
+def ema_holdouts(
+    code: Code,
+    stream: Sequence[Sequence[float]],
+    eta: float,
+    w0: Sequence[float] | None = None,
+) -> list[dict[str, float]]:
+    """Sticky Hebbian: w ← (1−η) w + η y x. Forgets the past; order matters."""
+    w = list(w0) if w0 is not None else [0.0] * code.n
+    rows: list[dict[str, float]] = []
+    for i, z in enumerate(stream):
+        x = code.embed(z)
+        y = _label_z1(z)
+        w = [(1.0 - eta) * wi + eta * y * xi for wi, xi in zip(w, x)]
+        row = two_sided_holdout(code, w)
+        row["n"] = float(i + 1)
+        rows.append(row)
+    return rows
 
 
 def weak_latent_error(code: Code) -> float:
