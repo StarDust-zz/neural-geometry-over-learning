@@ -223,6 +223,32 @@ def leaky_early_code() -> Code:
     return Code(axes=e.axes, omega=e.omega, noise=((0.4, 0.7, 0.2),))
 
 
+def few_shot_distractor_error(code: Code) -> float:
+    """Hebbian on two points where z2 tracks the label; test with z2 flipped.
+
+    True rule is sign(z1). A factorized late code can fit the distractor on
+    the sample and fail the flip. A compressed early code barely represents z2.
+    """
+    zs_train = ((1.0, 2.0), (-1.0, -2.0))
+    ys_train = (1, -1)
+    zs_test = ((1.0, -1.0), (0.8, -0.8), (-1.0, 1.0), (-0.8, 0.8))
+    ys_test = (1, 1, -1, -1)
+    return hebbian_error(
+        [code.embed(z) for z in zs_train],
+        ys_train,
+        [code.embed(z) for z in zs_test],
+        ys_test,
+    )
+
+
+def weak_latent_error(code: Code) -> float:
+    """Shatter on the weak latent z2 (same points as the many-shot assertion)."""
+    zs = ((1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0))
+    ys = (1, -1, 1, -1)
+    extra = ((0.3, 1.0), (0.3, -1.0), (-0.3, 1.0), (-0.3, -1.0))
+    return hebbian_error([code.embed(z) for z in zs], ys, [code.embed(z) for z in extra], ys)
+
+
 def late_code_shared_z1() -> Code:
     """Same z1 axis as late_code; z2 is rotated onto the former noise direction."""
     return Code(
@@ -319,6 +345,17 @@ def xor_aligned_feature_mixed(n: int = 12) -> list[tuple[float, float, float]]:
             trip.append((seed / 0x7FFFFFFF) * 2.0 - 1.0)
         out.append((trip[0], trip[1], bx))
     return out
+
+
+def xor_anti_aligned_feature_mixed(n: int = 12) -> list[tuple[float, float, float]]:
+    """Same remixed color/shape as the aligned second set; XOR signs flipped."""
+    return [(bc, bs, -bx) for bc, bs, bx in xor_aligned_feature_mixed(n)]
+
+
+def blend_alignment(t: float, n: int = 12) -> list[tuple[float, float, float]]:
+    """Second set walks from anti-aligned XOR (t=0) onto the late XOR axis (t=1)."""
+    anti, aligned = xor_anti_aligned_feature_mixed(n), xor_aligned_feature_mixed(n)
+    return [tuple((1.0 - t) * a + t * b for a, b in zip(u, v)) for u, v in zip(anti, aligned)]
 
 
 def shattering_score(selectivity: Sequence[tuple[float, float, float]]) -> float:

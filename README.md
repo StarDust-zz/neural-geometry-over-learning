@@ -13,7 +13,13 @@ This pack is the discrete algebra of those claims. Not a replay of the recording
 python3 experiment.py
 ```
 
-Last run: **13/13 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
+Last run: **16/16 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
+
+```
+python3 play.py
+```
+
+Walks the few-shot trap, a frozen XOR readout onto an aligning second set, and a frozen mixed readout on the way to minimal.
 
 ## Why this exists
 
@@ -53,12 +59,13 @@ Wójcik adds the stage names:
 python3 experiment.py
 ```
 
-Thirteen `PASS` lines and `13/13 passed`.
+Sixteen `PASS` lines and `16/16 passed`. `python3 play.py` prints the three paths.
 
 | file | what it is |
 | --- | --- |
 | [`geometry.py`](geometry.py) | four stats, optimal spectrum, Hebbian readout, mixed vs minimal XOR |
-| [`experiment.py`](experiment.py) | the thirteen assertions |
+| [`experiment.py`](experiment.py) | the sixteen assertions |
+| [`play.py`](play.py) | trap, alignment walk, abstraction — the geometry as a path |
 | [`DESCRIPTION.md`](DESCRIPTION.md) | short lab note |
 
 ## Assertions
@@ -76,6 +83,9 @@ Thirteen `PASS` lines and `13/13 passed`.
 11. **Mixed→minimal path.** XOR stays linearly decodable along the blend. Color collapses. Shattering dimensionality falls.
 12. **Axis-specific transfer.** A second set that keeps the XOR signs but remixes color/shape still accepts the old XOR readout. A color readout trained on a different mix does not transfer, even though color is locally decodable.
 13. **`p`-sweep.** Optimal `psi` at `p = 1, 2, 5, 10, 20, 50, 100`. Participation ratio rises, peak-to-tail spread falls, and the weakest mode's share of the trace grows. The code pays rent on the weak latents as samples accumulate.
+14. **Few-shot trap.** Two training points where `z2` is twice the label. The compressed code ignores the distractor (error 0). The factorized late code fits `z2` and scores 1 on the flip. Unlocking `z2` along the blend happens *before* the trap: there is a window where the weak latent is readable and the few-shot readout is still safe.
+15. **Alignment walk.** Freeze a late XOR readout. A second set with remixed color/shape walks from flipped XOR signs to matched signs. Transfer goes 0 → 1. Color stays locally decodable the whole way: transfer is the shared sign, not richness.
+16. **Frozen mixed readouts.** Train color and XOR on the mixed population, test along the path to minimal. XOR rides along (it was already in the mix). Color transfer dies. Abstraction is lossy.
 
 | `p` | PR | spread | weak share |
 | ---: | ---: | ---: | ---: |

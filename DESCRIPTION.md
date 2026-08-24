@@ -5,6 +5,7 @@ code is a trajectory, not a snapshot.
 
 ```
 python3 experiment.py
+python3 play.py
 ```
 
 No GPU. No recordings. No trained net.
@@ -39,7 +40,7 @@ collapse. A snapshot cannot tell you which stage you are in.
 
 ## Keepers
 
-If 13/13 pass: **the code is a scheduled change in geometry.** Early
+If 16/16 pass: **the code is a scheduled change in geometry.** Early
 and late are different executables over the same latents, and the
 stats move continuously along that path. The optimal spectrum
 flattens with sample count `p`: PR rises, spread falls, the weak
@@ -47,3 +48,8 @@ mode gains share. Mixed vs minimal is a learning stage, not a
 rival architecture. Transfer is alignment of a shared axis (a
 latent, or XOR), not a new decoder and not the whole mix.
 On-axis noise is the thing a late code gets rid of.
+
+The few-shot trap is the practical bite: unlocking a weak latent
+and becoming distractible are different times on the same path.
+A frozen mixed XOR readout survives abstraction; a frozen color
+readout does not.
