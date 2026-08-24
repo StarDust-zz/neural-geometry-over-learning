@@ -13,7 +13,7 @@ This pack is the discrete algebra of those claims. Not a replay of the recording
 python3 experiment.py
 ```
 
-Last run: **16/16 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
+Last run: **18/18 passed**. Python 3.10+, stdlib only. No GPU, no network, no model API.
 
 ```
 python3 play.py
@@ -59,13 +59,13 @@ Wójcik adds the stage names:
 python3 experiment.py
 ```
 
-Sixteen `PASS` lines and `16/16 passed`. `python3 play.py` prints the three paths.
+Eighteen `PASS` lines and `18/18 passed`. `python3 play.py` prints the five paths.
 
 | file | what it is |
 | --- | --- |
 | [`geometry.py`](geometry.py) | four stats, optimal spectrum, Hebbian readout, mixed vs minimal XOR |
-| [`experiment.py`](experiment.py) | the sixteen assertions |
-| [`play.py`](play.py) | trap, alignment walk, abstraction — the geometry as a path |
+| [`experiment.py`](experiment.py) | the eighteen assertions |
+| [`play.py`](play.py) | trap, alignment, abstraction, more points, noise |
 | [`DESCRIPTION.md`](DESCRIPTION.md) | short lab note |
 
 ## Assertions
@@ -86,6 +86,8 @@ Sixteen `PASS` lines and `16/16 passed`. `python3 play.py` prints the three path
 14. **Few-shot trap.** Two training points where `z2` is twice the label. The compressed code ignores the distractor (error 0). The factorized late code fits `z2` and scores 1 on the flip. Unlocking `z2` along the blend happens *before* the trap: there is a window where the weak latent is readable and the few-shot readout is still safe.
 15. **Alignment walk.** Freeze a late XOR readout. A second set with remixed color/shape walks from flipped XOR signs to matched signs. Transfer goes 0 → 1. Color stays locally decodable the whole way: transfer is the shared sign, not richness.
 16. **Frozen mixed readouts.** Train color and XOR on the mixed population, test along the path to minimal. XOR rides along (it was already in the mix). Color transfer dies. Abstraction is lossy.
+17. **More points.** Eight aligned copies of the same `z2`–label correlation still trap the late code (error 1). One flipped pair (four points total) drops late to 0. Extra samples of the same spurious cloud are not more `p`.
+18. **Noise.** Additive ambient jitter (`σ = 0.5`, 8 seeds, 10 test points) blurs the cliff along `t` but does not flip the winner: early stays near 0, late stays above 0.7, and eight aligned copies look like two. Once the cloud is balanced, both codes survive the same noise.
 
 | `p` | PR | spread | weak share |
 | ---: | ---: | ---: | ---: |

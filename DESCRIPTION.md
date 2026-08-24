@@ -40,7 +40,7 @@ collapse. A snapshot cannot tell you which stage you are in.
 
 ## Keepers
 
-If 16/16 pass: **the code is a scheduled change in geometry.** Early
+If 18/18 pass: **the code is a scheduled change in geometry.** Early
 and late are different executables over the same latents, and the
 stats move continuously along that path. The optimal spectrum
 flattens with sample count `p`: PR rises, spread falls, the weak
@@ -52,4 +52,6 @@ On-axis noise is the thing a late code gets rid of.
 The few-shot trap is the practical bite: unlocking a weak latent
 and becoming distractible are different times on the same path.
 A frozen mixed XOR readout survives abstraction; a frozen color
-readout does not.
+readout does not. More aligned copies do not save the late code;
+one flipped pair does. Observation noise blurs the cliff. It does
+not replace a balanced sample.
