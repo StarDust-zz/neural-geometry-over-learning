@@ -4,6 +4,7 @@
 
 from geometry import (
     XOR_CONDITIONS,
+    blend_alignment,
     blend_code,
     blend_selectivity,
     cross_code_error,
@@ -11,6 +12,7 @@ from geometry import (
     cross_set_xor,
     decode_feature,
     early_code,
+    few_shot_distractor_error,
     hebbian_error,
     late_code,
     late_code_shared_z1,
@@ -21,6 +23,7 @@ from geometry import (
     participation_ratio,
     random_mixed,
     shattering_score,
+    weak_latent_error,
     xor_aligned_feature_mixed,
 )
 
@@ -74,14 +77,8 @@ def scenario_3():
 
 def scenario_4():
     """Many-shot / new latent: late factorized code reads z2; early compressed misses it."""
-    # Shatter on the weak latent z2. Early code barely represents it.
-    zs = [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
-    ys = [1, -1, 1, -1]
-    extra = [(0.3, 1.0), (0.3, -1.0), (-0.3, 1.0), (-0.3, -1.0)]
-    early = early_code()
-    late = late_code()
-    e_err = hebbian_error([early.embed(z) for z in zs], ys, [early.embed(z) for z in extra], ys)
-    l_err = hebbian_error([late.embed(z) for z in zs], ys, [late.embed(z) for z in extra], ys)
+    e_err = weak_latent_error(early_code())
+    l_err = weak_latent_error(late_code())
     _ok(l_err < e_err, (e_err, l_err))
     _ok(l_err == 0.0, l_err)
     return {"early_err_z2": e_err, "late_err_z2": l_err}
@@ -130,15 +127,8 @@ def scenario_8():
     _ok(stats[0]["c"] > stats[1]["c"] > stats[2]["c"], [s["c"] for s in stats])
     _ok(stats[0]["f"] < stats[1]["f"] < stats[2]["f"], [s["f"] for s in stats])
     _ok(stats[0]["PR"] < stats[1]["PR"] < stats[2]["PR"], [s["PR"] for s in stats])
-    zs = [(1.0, 1.0), (1.0, -1.0), (-1.0, 1.0), (-1.0, -1.0)]
-    ys = [1, -1, 1, -1]
-    extra = [(0.3, 1.0), (0.3, -1.0), (-0.3, 1.0), (-0.3, -1.0)]
-    err0 = hebbian_error(
-        [blend_code(0.0).embed(z) for z in zs], ys, [blend_code(0.0).embed(z) for z in extra], ys
-    )
-    err1 = hebbian_error(
-        [blend_code(1.0).embed(z) for z in zs], ys, [blend_code(1.0).embed(z) for z in extra], ys
-    )
+    err0 = weak_latent_error(blend_code(0.0))
+    err1 = weak_latent_error(blend_code(1.0))
     _ok(err0 > err1, (err0, err1))
     _ok(err1 == 0.0, err1)
     return {
@@ -242,6 +232,54 @@ def scenario_13():
     }
 
 
+def scenario_14():
+    """Few-shot trap: late fits a correlated distractor; unlocking z2 is an earlier t."""
+    e_err = few_shot_distractor_error(early_code())
+    l_err = few_shot_distractor_error(late_code())
+    _ok(e_err == 0.0, e_err)
+    _ok(l_err == 1.0, l_err)
+    ts = tuple(i / 10 for i in range(11))
+    trap = [few_shot_distractor_error(blend_code(t)) for t in ts]
+    z2 = [weak_latent_error(blend_code(t)) for t in ts]
+    unlocked = [t for t, e in zip(ts, z2) if e == 0.0]
+    safe = [t for t, e in zip(ts, trap) if e == 0.0]
+    _ok(unlocked and safe, (unlocked, safe))
+    _ok(min(unlocked) < max(safe), (min(unlocked), max(safe)))
+    _ok(any(z == 0.0 and tr == 0.0 for z, tr in zip(z2, trap)), list(zip(ts, z2, trap)))
+    return {
+        "early_trap_err": e_err,
+        "late_trap_err": l_err,
+        "z2_unlocks_at": min(unlocked),
+        "trap_still_zero_until": max(safe),
+    }
+
+
+def scenario_15():
+    """Frozen late XOR readout: transfer is 0 anti-aligned, 1 once the axis matches."""
+    src = minimal_xor()
+    ts = (0.0, 0.25, 0.5, 0.75, 1.0)
+    xfer = [cross_set_xor(src, blend_alignment(t)) for t in ts]
+    color = [decode_feature(blend_alignment(t), 0) for t in ts]
+    _ok(xfer[0] == 0.0, xfer[0])
+    _ok(xfer[-1] == 1.0, xfer[-1])
+    _ok(all(xfer[i] <= xfer[i + 1] for i in range(len(xfer) - 1)), xfer)
+    _ok(all(c == 1.0 for c in color), color)
+    return {"xor_transfer": xfer, "color_local": color}
+
+
+def scenario_16():
+    """Frozen mixed readouts on the way to minimal: XOR rides along; color dies."""
+    src = blend_selectivity(0.0)
+    ts = (0.0, 0.25, 0.5, 0.75, 1.0)
+    xor_xfer = [cross_set_xor(src, blend_selectivity(t)) for t in ts]
+    color_xfer = [cross_set_feature(src, blend_selectivity(t), 0) for t in ts]
+    _ok(all(x == 1.0 for x in xor_xfer), xor_xfer)
+    _ok(color_xfer[0] == 1.0, color_xfer[0])
+    _ok(color_xfer[-1] == 0.5, color_xfer[-1])
+    _ok(color_xfer[0] > color_xfer[-1], color_xfer)
+    return {"xor_transfer": xor_xfer, "color_transfer": color_xfer}
+
+
 def main():
     scenarios = [
         ("1 optimal spectrum flattens with p", scenario_1),
@@ -257,6 +295,9 @@ def main():
         ("11 mixed→minimal: XOR stays, extras collapse", scenario_11),
         ("12 transfer is the shared axis, not the whole mix", scenario_12),
         ("13 p-sweep: optimal spectrum flattens with sample count", scenario_13),
+        ("14 few-shot trap: late overfits z2; z2 unlocks earlier", scenario_14),
+        ("15 frozen XOR: transfer walks with axis alignment", scenario_15),
+        ("16 frozen mixed: XOR rides to minimal; color dies", scenario_16),
     ]
     failed = 0
     for name, fn in scenarios:
