@@ -223,22 +223,97 @@ def leaky_early_code() -> Code:
     return Code(axes=e.axes, omega=e.omega, noise=((0.4, 0.7, 0.2),))
 
 
-def few_shot_distractor_error(code: Code) -> float:
-    """Hebbian on two points where z2 tracks the label; test with z2 flipped.
+# z2 = 2 * sign(z1) (aligned) or the flip. Label is always sign(z1).
+_ALIGNED_Z = (
+    (1.0, 2.0),
+    (-1.0, -2.0),
+    (0.8, 1.6),
+    (-0.8, -1.6),
+    (1.2, 2.4),
+    (-1.2, -2.4),
+    (0.6, 1.2),
+    (-0.6, -1.2),
+)
+_FLIPPED_Z = (
+    (1.0, -2.0),
+    (-1.0, 2.0),
+    (0.8, -1.6),
+    (-0.8, 1.6),
+    (1.2, -2.4),
+    (-1.2, 2.4),
+    (0.6, -1.2),
+    (-0.6, 1.2),
+)
+_DISTRACTOR_TEST_Z = (
+    (1.0, -1.0),
+    (0.8, -0.8),
+    (1.2, -1.2),
+    (0.6, -0.6),
+    (0.9, -1.5),
+    (-1.0, 1.0),
+    (-0.8, 0.8),
+    (-1.2, 1.2),
+    (-0.6, 0.6),
+    (-0.9, 1.5),
+)
+NOISE_SEEDS = (3, 7, 11, 19, 29, 41, 43, 53)
 
-    True rule is sign(z1). A factorized late code can fit the distractor on
-    the sample and fail the flip. A compressed early code barely represents z2.
-    """
-    zs_train = ((1.0, 2.0), (-1.0, -2.0))
-    ys_train = (1, -1)
-    zs_test = ((1.0, -1.0), (0.8, -0.8), (-1.0, 1.0), (-0.8, 0.8))
-    ys_test = (1, 1, -1, -1)
-    return hebbian_error(
-        [code.embed(z) for z in zs_train],
-        ys_train,
-        [code.embed(z) for z in zs_test],
-        ys_test,
-    )
+
+def _label_z1(z: Sequence[float]) -> int:
+    return 1 if z[0] > 0 else -1
+
+
+def _lcg_signed(seed: int):
+    s = seed & 0x7FFFFFFF
+
+    def nxt() -> float:
+        nonlocal s
+        s = (1103515245 * s + 12345) & 0x7FFFFFFF
+        return (s / 0x7FFFFFFF) * 2.0 - 1.0
+
+    return nxt
+
+
+def jitter(vec: Sequence[float], scale: float, seed: int) -> list[float]:
+    """Deterministic additive noise in ambient coordinates. scale=0 is a no-op."""
+    if scale <= 0:
+        return list(vec)
+    nxt = _lcg_signed(seed)
+    return [x + scale * nxt() for x in vec]
+
+
+def distractor_cloud(n_aligned: int, n_flipped: int = 0) -> tuple[list[tuple[float, float]], list[int]]:
+    """Training cloud for sign(z1). Aligned points have z2 tracking the label."""
+    if n_aligned > len(_ALIGNED_Z) or n_flipped > len(_FLIPPED_Z):
+        raise ValueError("distractor catalog exhausted")
+    zs = list(_ALIGNED_Z[:n_aligned]) + list(_FLIPPED_Z[:n_flipped])
+    return zs, [_label_z1(z) for z in zs]
+
+
+def distractor_error(
+    code: Code,
+    n_aligned: int = 2,
+    n_flipped: int = 0,
+    noise: float = 0.0,
+    seeds: Sequence[int] = (7,),
+) -> float:
+    """Mean Hebbian error on z2-flipped tests. noise>0 averages over `seeds`."""
+    zs, ys = distractor_cloud(n_aligned, n_flipped)
+    y_test = [_label_z1(z) for z in _DISTRACTOR_TEST_Z]
+    acc = []
+    for s0 in seeds:
+        xs = [jitter(code.embed(z), noise, (s0 + 17 * i) & 0x7FFFFFFF) for i, z in enumerate(zs)]
+        xt = [
+            jitter(code.embed(z), noise, (10_000 + s0 + 17 * i) & 0x7FFFFFFF)
+            for i, z in enumerate(_DISTRACTOR_TEST_Z)
+        ]
+        acc.append(hebbian_error(xs, ys, xt, y_test))
+    return sum(acc) / len(acc)
+
+
+def few_shot_distractor_error(code: Code) -> float:
+    """Two aligned points, no noise: the original trap."""
+    return distractor_error(code, n_aligned=2, n_flipped=0, noise=0.0, seeds=(7,))
 
 
 def weak_latent_error(code: Code) -> float:

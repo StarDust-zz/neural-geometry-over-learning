@@ -13,11 +13,13 @@ from geometry import (
     decode_feature,
     early_code,
     few_shot_distractor_error,
+    distractor_error,
     hebbian_error,
     late_code,
     late_code_shared_z1,
     leaky_early_code,
     minimal_xor,
+    NOISE_SEEDS,
     optimal_spectrum,
     optimal_spectrum_path,
     participation_ratio,
@@ -280,6 +282,50 @@ def scenario_16():
     return {"xor_transfer": xor_xfer, "color_transfer": color_xfer}
 
 
+def scenario_17():
+    """More aligned copies do not save late. One flipped pair does."""
+    e2 = distractor_error(early_code(), n_aligned=2)
+    l2 = distractor_error(late_code(), n_aligned=2)
+    e8 = distractor_error(early_code(), n_aligned=8)
+    l8 = distractor_error(late_code(), n_aligned=8)
+    e_bal = distractor_error(early_code(), n_aligned=2, n_flipped=2)
+    l_bal = distractor_error(late_code(), n_aligned=2, n_flipped=2)
+    _ok(e2 == 0.0 and e8 == 0.0, (e2, e8))
+    _ok(l2 == 1.0 and l8 == 1.0, (l2, l8))
+    _ok(e_bal == 0.0, e_bal)
+    _ok(l_bal == 0.0, l_bal)
+    return {
+        "aligned_n2": {"early": e2, "late": l2},
+        "aligned_n8": {"early": e8, "late": l8},
+        "plus_one_flipped_pair": {"early": e_bal, "late": l_bal},
+    }
+
+
+def scenario_18():
+    """Observation noise blurs the trap; it does not flip who wins until the cloud is balanced."""
+    scale = 0.5
+    e2 = distractor_error(early_code(), n_aligned=2, noise=scale, seeds=NOISE_SEEDS)
+    l2 = distractor_error(late_code(), n_aligned=2, noise=scale, seeds=NOISE_SEEDS)
+    e8 = distractor_error(early_code(), n_aligned=8, noise=scale, seeds=NOISE_SEEDS)
+    l8 = distractor_error(late_code(), n_aligned=8, noise=scale, seeds=NOISE_SEEDS)
+    e_bal = distractor_error(early_code(), n_aligned=2, n_flipped=4, noise=scale, seeds=NOISE_SEEDS)
+    l_bal = distractor_error(late_code(), n_aligned=2, n_flipped=4, noise=scale, seeds=NOISE_SEEDS)
+    path = [distractor_error(blend_code(t), n_aligned=2, noise=scale, seeds=NOISE_SEEDS) for t in (0.0, 0.5, 1.0)]
+    _ok(e2 < 0.05, e2)
+    _ok(l2 > 0.7, l2)
+    _ok(abs(l8 - l2) < 0.05, (l2, l8))
+    _ok(e8 < 0.05, e8)
+    _ok(l_bal < 0.05 and e_bal < 0.05, (e_bal, l_bal))
+    _ok(path[0] < path[1] < path[2], path)
+    return {
+        "noise": scale,
+        "aligned_n2": {"early": round(e2, 3), "late": round(l2, 3)},
+        "aligned_n8": {"early": round(e8, 3), "late": round(l8, 3)},
+        "balanced_n6": {"early": round(e_bal, 3), "late": round(l_bal, 3)},
+        "path_n2": [round(x, 3) for x in path],
+    }
+
+
 def main():
     scenarios = [
         ("1 optimal spectrum flattens with p", scenario_1),
@@ -298,6 +344,8 @@ def main():
         ("14 few-shot trap: late overfits z2; z2 unlocks earlier", scenario_14),
         ("15 frozen XOR: transfer walks with axis alignment", scenario_15),
         ("16 frozen mixed: XOR rides to minimal; color dies", scenario_16),
+        ("17 more points: aligned copies fail; a flipped pair saves late", scenario_17),
+        ("18 noise: trap blurs, more aligned copies still fail", scenario_18),
     ]
     failed = 0
     for name, fn in scenarios:

@@ -3,13 +3,17 @@
 """Play the geometry path. python3 play.py"""
 
 from geometry import (
+    NOISE_SEEDS,
     blend_alignment,
     blend_code,
     blend_selectivity,
     cross_set_feature,
     cross_set_xor,
     decode_feature,
+    distractor_error,
     few_shot_distractor_error,
+    early_code,
+    late_code,
     minimal_xor,
     shattering_score,
     weak_latent_error,
@@ -31,7 +35,7 @@ def _section(title: str, note: str) -> None:
 def trap_path() -> None:
     _section(
         "A  few-shot trap",
-        "train sign(z1) on 2 points where z2 is 2x the label; test with z2 flipped.",
+        "train sign(z1) on 2 aligned points; test 10 points with z2 flipped.",
     )
     print(f"  {'t':>4}  {'trap':>4}  {'z2':>4}  {'c':>5}  {'f':>5}  {'PR':>5}  trap                 z2")
     window = []
@@ -96,12 +100,63 @@ def abstraction_path() -> None:
     print("  notice: abstraction is lossy. the rule rides along; discarded features do not.")
 
 
+def more_points() -> None:
+    _section(
+        "D  more points",
+        "same trap test (z2 flipped). extra aligned copies vs one flipped pair.",
+    )
+    print(f"  {'cloud':<22}  early  late")
+    rows = (
+        ("aligned n=2", 2, 0),
+        ("aligned n=4", 4, 0),
+        ("aligned n=8", 8, 0),
+        ("n=2 + 1 flipped pair", 2, 2),
+        ("n=2 + 2 flipped pairs", 2, 4),
+        ("n=2 + 3 flipped pairs", 2, 6),
+    )
+    for name, na, nf in rows:
+        e = distractor_error(early_code(), n_aligned=na, n_flipped=nf)
+        l = distractor_error(late_code(), n_aligned=na, n_flipped=nf)
+        print(f"  {name:<22}  {e:5.2f}  {l:5.2f}  {_bar(e)}  {_bar(l)}")
+    print("  notice: more of the same spurious correlation does not save late. one flipped pair does.")
+
+
+def noise_sweep() -> None:
+    _section(
+        "E  observation noise (mean over 8 seeds, 10 test points)",
+        "additive ambient jitter. aligned n=2 / aligned n=8 / balanced n=6.",
+    )
+    print(f"  {'s':>4}  {'e2':>5}  {'l2':>5}  {'e8':>5}  {'l8':>5}  {'e_bal':>5}  {'l_bal':>5}")
+    for scale in (0.0, 0.25, 0.5, 1.0, 1.5):
+        seeds = (7,) if scale == 0.0 else NOISE_SEEDS
+        e2 = distractor_error(early_code(), n_aligned=2, noise=scale, seeds=seeds)
+        l2 = distractor_error(late_code(), n_aligned=2, noise=scale, seeds=seeds)
+        e8 = distractor_error(early_code(), n_aligned=8, noise=scale, seeds=seeds)
+        l8 = distractor_error(late_code(), n_aligned=8, noise=scale, seeds=seeds)
+        eb = distractor_error(early_code(), n_aligned=2, n_flipped=4, noise=scale, seeds=seeds)
+        lb = distractor_error(late_code(), n_aligned=2, n_flipped=4, noise=scale, seeds=seeds)
+        print(
+            f"  {scale:4.2f}  {e2:5.2f}  {l2:5.2f}  {e8:5.2f}  {l8:5.2f}  {eb:5.2f}  {lb:5.2f}"
+        )
+    print()
+    print("  t-path at s=0.5, aligned n=2 (trap rises) vs balanced n=6 (stays down)")
+    print(f"  {'t':>4}  n2     bal")
+    for i in range(11):
+        t = i / 10
+        a = distractor_error(blend_code(t), n_aligned=2, noise=0.5, seeds=NOISE_SEEDS)
+        b = distractor_error(blend_code(t), n_aligned=2, n_flipped=4, noise=0.5, seeds=NOISE_SEEDS)
+        print(f"  {t:4.1f}  {a:5.2f}  {b:5.2f}  {_bar(a)}  {_bar(b)}")
+    print("  notice: noise blurs the cliff. it does not replace a flipped pair.")
+
+
 def main() -> None:
     print("neural geometry playground")
     print("a path, not a snapshot. stdlib only.")
     trap_path()
     alignment_path()
     abstraction_path()
+    more_points()
+    noise_sweep()
     print()
 
 
